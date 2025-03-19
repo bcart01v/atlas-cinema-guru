@@ -1,35 +1,62 @@
 import { auth } from "@/auth";
-import { fetchGenres, fetchTitles } from "@/lib/data";
+import { fetchTitles } from "@/lib/data";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
  * GET /api/titles
  */
-export const GET = auth(async (req: NextRequest) => {
-  //@ts-ignore
-  if (!req.auth) {
+export async function GET(req: NextRequest) {
+  const session = await auth();
+
+  if (!session || !session.user || !session.user.email) {
     return NextResponse.json(
       { error: "Unauthorized - Not logged in" },
       { status: 401 }
     );
   }
 
-  const {
-    user: { email }, //@ts-ignore
-  } = req.auth;
-
+  const email = session.user.email;
   const params = req.nextUrl.searchParams;
-  const page = params.get("page") ? Number(params.get("page")) : 1;
-  const minYear = params.get("minYear") ? Number(params.get("minYear")) : 0;
-  const maxYear = params.get("maxYear")
-    ? Number(params.get("maxYear"))
-    : new Date().getFullYear();
-  const query = params.get("query") ?? "";
-  const genres = params.get("genres")?.split(",") ?? (await fetchGenres());
 
-  const title = await fetchTitles(page, minYear, maxYear, query, genres, email);
+  const page = Number(params.get("page")) || 1;
+  const minYear = Number(params.get("minYear")) || 0;
+  const maxYear = Number(params.get("maxYear")) || new Date().getFullYear();
+  const query = params.get("query")?.trim() ?? "";
 
-  return NextResponse.json({
-    title: title,
-  });
-});
+  const genres =
+    params
+      .get("genres")
+      ?.split(",")
+      .map((g) => g.trim())
+      .filter((g) => g.length > 0) ?? [];
+
+  if (
+    isNaN(page) || page < 1 ||
+    isNaN(minYear) || minYear < 0 ||
+    isNaN(maxYear) || maxYear < 0
+  ) {
+    return NextResponse.json(
+      { error: "Invalid query parameters" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const { titles, totalPages } = await fetchTitles(
+      page,
+      minYear,
+      maxYear,
+      query,
+      genres,
+      email
+    );
+
+    return NextResponse.json({ titles, totalPages });
+  } catch (error) {
+    console.error("Database Error - Failed to fetch titles:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch titles" },
+      { status: 500 }
+    );
+  }
+}

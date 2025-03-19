@@ -2,25 +2,36 @@ import { auth } from "@/auth";
 import { fetchActivities } from "@/lib/data";
 import { NextRequest, NextResponse } from "next/server";
 
+interface AuthenticatedRequest extends NextRequest {
+  auth: {
+    user: {
+      email: string;
+    };
+  };
+}
+
 /**
  * GET /api/activities
  */
 export const GET = auth(async (req: NextRequest) => {
-  const params = req.nextUrl.searchParams;
-  const page = params.get("page") ? Number(params.get("page")) : 1;
+  const authenticatedReq = req as AuthenticatedRequest;
 
-  //@ts-ignore
-  if (!req.auth) {
+  if (!authenticatedReq.auth || !authenticatedReq.auth.user) {
     return NextResponse.json(
       { error: "Unauthorized - Not logged in" },
       { status: 401 }
     );
   }
 
-  const {
-    user: { email }, //@ts-ignore
-  } = req.auth;
+  const { email } = authenticatedReq.auth.user;
 
-  const activities = await fetchActivities(page, email);
-  return NextResponse.json({ activities });
+  try {
+    const activities = await fetchActivities(email, 6);
+    return NextResponse.json({ activities });
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Failed to fetch activities" },
+      { status: 500 }
+    );
+  }
 });

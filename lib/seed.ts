@@ -40,7 +40,7 @@ export async function seedTitles() {
         console.log("Error inserting title:", title.id);
         console.log(error);
       }
-    })
+    }),
   );
 
   return insertedTitles;
